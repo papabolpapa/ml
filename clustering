@@ -1,0 +1,102 @@
+# Import necessary libraries
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.cluster import KMeans, DBSCAN
+from sklearn.mixture import GaussianMixture
+from sklearn.metrics import silhouette_score, davies_bouldin_score
+
+# Load dataset
+df = pd.read_csv('Mall_Customers.csv')
+df
+# Display the first few rows of the dataset
+df.head()
+# Check for missing values
+print("Missing values in each column:\n", df.isnull().sum())
+
+df.describe()
+
+df.info()
+# Label Encoding: Convert 'Gender' column to numeric
+label_encoder = LabelEncoder()
+df['Genre'] = label_encoder.fit_transform(df['Genre'])
+# Feature Scaling
+scaler = StandardScaler()
+df[['Annual Income (k$)', 'Spending Score (1-100)']] = scaler.fit_transform(df[['Annual Income (k$)', 'Spending Score (1-100)']])
+
+# Select features for clustering
+X = df[['Annual Income (k$)', 'Spending Score (1-100)']]
+# 1. Partitioning Clustering (K-Means)
+# Determine the optimal number of clusters using the Elbow Method
+inertia = []
+for k in range(1, 11):
+    kmeans = KMeans(n_clusters=k, random_state=42)
+    kmeans.fit(X)
+    inertia.append(kmeans.inertia_)
+
+# Plot the Elbow Method graph
+plt.figure(figsize=(8, 5))
+plt.plot(range(1, 11), inertia, 'bo-')
+plt.xlabel('Number of Clusters')
+plt.ylabel('Inertia')
+plt.title('Elbow Method to Determine Optimal K')
+plt.show()
+# Fit K-Means with optimal clusters (choose based on the Elbow plot)
+optimal_clusters = 5  # Assuming we select 5 based on the elbow
+kmeans = KMeans(n_clusters=optimal_clusters, random_state=42)
+df['Cluster_KMeans'] = kmeans.fit_predict(X)
+# 2. Density-Based Clustering (DBSCAN)
+# Fit DBSCAN with chosen parameters for eps and min_samples
+dbscan = DBSCAN(eps=0.5, min_samples=5)
+df['Cluster_DBSCAN'] = dbscan.fit_predict(X)
+# 3. Distribution Model-Based Clustering (Gaussian Mixture Model)
+gmm = GaussianMixture(n_components=optimal_clusters, random_state=42)
+df['Cluster_GMM'] = gmm.fit_predict(X)
+# Visualize Clusters for each clustering method
+plt.figure(figsize=(18, 5))
+
+# K-Means Clustering Visualization
+plt.subplot(1, 3, 1)
+sns.scatterplot(data=df, x='Annual Income (k$)', y='Spending Score (1-100)', hue='Cluster_KMeans', palette='viridis')
+plt.title('K-Means Clustering')
+
+# DBSCAN Clustering Visualization
+plt.subplot(1, 3, 2)
+sns.scatterplot(data=df, x='Annual Income (k$)', y='Spending Score (1-100)', hue='Cluster_DBSCAN', palette='viridis')
+plt.title('DBSCAN Clustering')
+
+# GMM Clustering Visualization
+plt.subplot(1, 3, 3)
+sns.scatterplot(data=df, x='Annual Income (k$)', y='Spending Score (1-100)', hue='Cluster_GMM', palette='viridis')
+plt.title('Gaussian Mixture Model Clustering')
+
+plt.show()
+# Evaluation Metrics for each model
+# 1. K-Means Evaluation
+kmeans_silhouette = silhouette_score(X, df['Cluster_KMeans'])
+kmeans_davies_bouldin = davies_bouldin_score(X, df['Cluster_KMeans'])
+
+print("K-Means Silhouette Score:", kmeans_silhouette)
+print("K-Means Davies-Bouldin Index:", kmeans_davies_bouldin)
+
+# 2. DBSCAN Evaluation (Note: silhouette score may be lower due to noise points (-1 label))
+# Filter out noise points for DBSCAN score calculation
+dbscan_labels = df['Cluster_DBSCAN']
+dbscan_labels_filtered = dbscan_labels[dbscan_labels != -1]
+X_dbscan_filtered = X[dbscan_labels != -1]
+
+if len(set(dbscan_labels_filtered)) > 1:  # Only calculate if there are more than 1 cluster
+    dbscan_silhouette = silhouette_score(X_dbscan_filtered, dbscan_labels_filtered)
+    dbscan_davies_bouldin = davies_bouldin_score(X_dbscan_filtered, dbscan_labels_filtered)
+    print("DBSCAN Silhouette Score (excluding noise):", dbscan_silhouette)
+    print("DBSCAN Davies-Bouldin Index (excluding noise):", dbscan_davies_bouldin)
+else:
+    print("DBSCAN clustering did not find enough clusters.")
+# 3. GMM Evaluation
+gmm_silhouette = silhouette_score(X, df['Cluster_GMM'])
+gmm_davies_bouldin = davies_bouldin_score(X, df['Cluster_GMM'])
+
+print("GMM Silhouette Score:", gmm_silhouette)
+print("GMM Davies-Bouldin Index:", gmm_davies_bouldin)
